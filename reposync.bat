@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 :: ================================================================
-:: REPOSYNC - The Ultimate Git Sync Utility (v2.2)
+:: REPOSYNC - The Ultimate Git Sync Utility (v2.2.1)
 :: MIT License - Copyright (c) 2026 cijamie
 :: ================================================================
 
@@ -51,9 +51,9 @@ if defined UPSTREAM (
     if "!REMOTE!"=="" (for /f "tokens=*" %%i in ('git remote 2^>nul') do set "REMOTE=%%i")
 )
 
-title RepoSync v2.2 - %BRANCH% @ %REMOTE%
+title RepoSync v2.2.1 - %BRANCH% @ %REMOTE%
 echo %C%================================================================%W%
-echo           %G%REPOSYNC v2.2 - ELITE SYNC UTILITY%W%
+echo           %G%REPOSYNC v2.2.1 - ELITE SYNC UTILITY%W%
 echo           Target: %Y%%BRANCH%%W% on %Y%%REMOTE%%W%
 echo %C%================================================================%W%
 
@@ -64,7 +64,7 @@ if /i "%BRANCH%"=="master" set "IS_PROD=1"
 if /i "%BRANCH%"=="prod" set "IS_PROD=1"
 
 if %IS_PROD% equ 1 (
-    echo %R%%B%[WARNING]%W% You are on a %R%PRODUCTION%W% branch (%Y%%BRANCH%%W%).
+    echo %R%%B%[WARNING]%W% You are on a %R%PRODUCTION%W% branch ^(%Y%%BRANCH%%W%^).
     echo           Please triple-check your changes.
     echo.
 )
@@ -129,7 +129,7 @@ if %IS_DRY% equ 0 (
 )
 
 :staged
-echo [%C%3/7%W%] Pulling from %REMOTE%/%BRANCH% (rebase)...
+echo [%C%3/7%W%] Pulling from %REMOTE%/%BRANCH% ^(rebase^)...
 if %IS_DRY% equ 0 (
     git pull --rebase %REMOTE% %BRANCH%
     if !errorlevel! neq 0 (
@@ -169,7 +169,7 @@ if /i "%msg%"=="--dry" set "msg="
 if /i "%msg%"=="-d" set "msg="
 
 if not defined msg (
-    set /p msg="[%G%ENTER COMMIT MESSAGE%W% (blank for auto)]: "
+    set /p msg="[%G%ENTER COMMIT MESSAGE%W% ^(blank for auto^)]: "
 ) else (
     echo      Using argument: %Y%!msg!%W%
 )
