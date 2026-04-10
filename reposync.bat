@@ -11,7 +11,15 @@ set "C=%ESC%[96m"  & :: Cyan
 set "Y=%ESC%[93m"  & :: Yellow
 set "W=%ESC%[0m"   & :: White/Reset
 
-:: 2. Dynamic Identity Detection
+:: 2. Pre-Check: Is Git installed?
+where git >nul 2>1
+if %errorlevel% neq 0 (
+    echo %R%[ERROR]%W% Git is not installed or not in your PATH.
+    pause
+    exit /b 1
+)
+
+:: 3. Dynamic Identity Detection
 for /f "tokens=*" %%i in ('git rev-parse --show-toplevel 2^>nul') do set "REPO_ROOT=%%i"
 if "%REPO_ROOT%"=="" (
     echo %R%[ERROR]%W% This folder is not a Git repository.
@@ -37,7 +45,27 @@ echo           Target: %Y%%BRANCH%%W% on %Y%%REMOTE%%W%
 echo %C%================================================================%W%
 echo.
 
-:: 3. Pre-flight Connection Check
+:: 4. Self-Healing: Check for "Stale" States
+if exist "%REPO_ROOT%\.git\rebase-merge" (
+    echo %R%[ALERT]%W% A previous rebase was interrupted.
+    set /p fix="Resolve and continue? (y/n): "
+    if /i "!fix!"=="y" (
+        git rebase --continue
+    ) else (
+        echo %Y%[ABORT]%W% Resolve manually with 'git rebase --abort'.
+        pause
+        exit /b 1
+    )
+)
+
+:: Check for existing "TEMP" commit from previous failed run
+git log -1 --pretty=format:%%s | findstr "TEMP: RepoSync auto-save" >nul
+if %errorlevel% equ 0 (
+    echo %Y%[RECOVERY]%W% Found a leftover 'TEMP' commit. Removing it safely...
+    git reset --soft HEAD~1
+)
+
+:: 5. Pre-flight Connection Check
 echo [%C%0/7%W%] Verifying remote connectivity...
 git ls-remote --exit-code %REMOTE% >nul 2>&1
 if %errorlevel% neq 0 (
@@ -46,6 +74,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: 6. Sync Logic
 echo [%C%1/7%W%] Detecting repo state...
 git status --porcelain | findstr . >nul
 if %errorlevel% neq 0 (
@@ -78,6 +107,12 @@ if %errorlevel% neq 0 (
     echo      No changes to commit.
     goto :push
 )
+
+:: 7. Change Summary & Final Commit
+echo.
+echo %G%[ CHANGELOG SUMMARY ]%W%
+git status --short
+echo.
 
 echo [%C%6/7%W%] %G%Ready to commit%W%...
 set "msg="

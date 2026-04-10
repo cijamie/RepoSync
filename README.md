@@ -12,9 +12,6 @@
 - [Installation](#installation)
 - [Usage](#usage)
 - [Requirements](#requirements)
-- [When to Use RepoSync](#when-to-use-reposync)
-- [Limitations](#limitations)
-- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -28,59 +25,38 @@ RepoSync is a single `reposync.bat` script designed to quickly synchronize your 
 ## Features
 
 - **ANSI Color Support** for clear, professional terminal output.
+- **Self-Healing Recovery** automatically detects interrupted rebases or leftover `TEMP` commits.
+- **Changelog Summary** shows you exactly which files changed before you write your commit message.
 - **Pre-flight Connectivity Check** to catch network/credential issues early.
 - **Robust Upstream Detection** using `git rev-parse --abbrev-ref @{u}`.
 - **ISO-8601 Standardized Timestamps** for consistent auto-commit messages.
-- **Auto-detection** of repo root via `git rev-parse --show-toplevel`.
-- **Safe handling** of uncommitted changes via a temporary commit before pull.
 - **Linear history** via `git pull --rebase` to avoid unnecessary merge commits.
-- **Interactive commit prompt** with an auto-generated fallback message.
 
 ---
 
 ## How It Works
 
-RepoSync runs through a numbered sequence every time you execute `reposync.bat` inside a Git repository.
-
-### Step 0 — Connectivity Check
-Before starting, RepoSync runs `git ls-remote` to ensure the remote is reachable. This prevents the script from failing halfway through a sync if you are offline.
-
-### Step 1 — Change Detection
-Checks for local changes using `git status --porcelain`.
-
-### Step 2 — Temporary Auto-Commit
-If changes are detected, they are staged and committed with a `TEMP` message to protect them during the rebase.
-
-### Step 3 — Rebase Pull from Remote
-Fetches and rebases the remote changes on top of your local work.
-
-### Step 4 — Temporary Commit Removal
-Drops the `TEMP` commit while keeping your changes staged and ready for a proper message.
-
-### Step 5 — Final Change Check
-Verifies if there are still changes to commit after the rebase.
-
-### Step 6 — Interactive Commit
-Prompts for a commit message. If left blank, it generates one using an ISO-8601 timestamp (`YYYY-MM-DD HH:MM`).
-
-### Step 7 — Push to Remote
-Pushes your synchronized work to the remote repository.
+1. **Step 0: Connectivity Check** — Verifies remote reachable.
+2. **Step 1: Change Detection** — Identifies local work.
+3. **Step 2: Temporary Auto-Commit** — Protects work during rebase.
+4. **Step 3: Rebase Pull** — Syncs with remote.
+5. **Step 4: Temp Removal** — Unstages changes for your message.
+6. **Step 5: Final Check** — Confirms if commit is needed.
+7. **Step 6: Summary & Commit** — Shows modified files and prompts for message.
+8. **Step 7: Push** — Sends synchronized work to remote.
 
 ---
 
 ## Installation
 
-RepoSync is distributed as a single Windows batch file — `reposync.bat`.
+### 🚀 Quick Download
+**Right-click the link below and select "Save link as..."**
+[**Download reposync.bat (v2.1)**](https://raw.githubusercontent.com/cijamie/RepoSync/main/reposync.bat)
 
-### Option 1 — Single Project Use
-1. Download `reposync.bat`.
-2. Drop it into the root of your Git project.
-3. Run it.
-
-### Option 2 — Global Use (Recommended)
-1. Place `reposync.bat` in a dedicated scripts directory (e.g., `C:\Tools\`).
-2. Add that directory to your system `PATH`.
-3. Run `reposync` from any Git repository on your system.
+### Global Setup (Recommended)
+1. Place `reposync.bat` in a directory like `C:\Tools\`.
+2. Add that directory to your system **PATH**.
+3. Run `reposync` from any terminal in any Git repository.
 
 ---
 
@@ -88,15 +64,15 @@ RepoSync is distributed as a single Windows batch file — `reposync.bat`.
 
 | Requirement | Details |
 |---|---|
-| Operating System | Windows 10+ (for ANSI color support) |
-| Git | Must be installed and available on `PATH` |
-| PowerShell | Used for standardized timestamp generation |
+| Operating System | Windows 10+ |
+| Git | Installed and on PATH |
+| PowerShell | Installed (standard on Windows) |
 
 ---
 
 ## License
 
-A license has not yet been formally defined for this repository. Until one is added, all rights are reserved.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details. It is fully open source and free to use, modify, and distribute.
 
 ---
 
