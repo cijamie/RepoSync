@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 :: ================================================================
-:: REPOSYNC - The Ultimate Git Sync Utility (v2.2.2)
+:: REPOSYNC - The Ultimate Git Sync Utility (v2.2.3)
 :: MIT License - Copyright (c) 2026 cijamie
 :: ================================================================
 
@@ -40,10 +40,9 @@ if "%REPO_ROOT%"=="" (
     exit /b 1
 )
 
-:: FORCE move to repo root (Critical for double-click success)
 cd /d "%REPO_ROOT%"
 
-:: Try to detect upstream tracking branch
+:: Detect Upstream
 for /f "tokens=*" %%i in ('git rev-parse --abbrev-ref @{u} 2^>nul') do set "UPSTREAM=%%i"
 if defined UPSTREAM (
     for /f "tokens=1 delims=/" %%a in ("%UPSTREAM%") do set "REMOTE=%%a"
@@ -54,9 +53,9 @@ if defined UPSTREAM (
     if "!REMOTE!"=="" (for /f "tokens=*" %%i in ('git remote 2^>nul') do set "REMOTE=%%i")
 )
 
-title RepoSync v2.2.2 - %BRANCH% @ %REMOTE%
+title RepoSync v2.2.3 - %BRANCH% @ %REMOTE%
 echo %C%================================================================%W%
-echo           %G%REPOSYNC v2.2.2 - ELITE SYNC UTILITY%W%
+echo           %G%REPOSYNC v2.2.3 - ELITE SYNC UTILITY%W%
 echo           Target: %Y%%BRANCH%%W% on %Y%%REMOTE%%W%
 echo %C%================================================================%W%
 
@@ -89,20 +88,16 @@ if exist ".git\rebase-merge" (
             pause
             exit /b 1
         )
-    ) else (
-        echo %M%[DRY]%W% Would suggest resolving rebase.
     )
 )
 
-:: Check for existing "TEMP" commit from previous failed run
+:: Check for existing "TEMP" commit from previous run
 git log -1 --pretty=format:%%s 2>nul | findstr "TEMP: RepoSync auto-save" >nul
 if %errorlevel% equ 0 (
     echo %Y%[RECOVERY]%W% Found a leftover 'TEMP' commit. 
     if %IS_DRY% equ 0 (
         echo      Removing it safely...
         git reset --soft HEAD~1
-    ) else (
-        echo %M%[DRY]%W% Would remove TEMP commit.
     )
 )
 
@@ -128,9 +123,10 @@ if %HAS_CHANGES% equ 0 (
 echo [%C%2/7%W%] %Y%Changes detected%W% - creating temp commit...
 if %IS_DRY% equ 0 (
     git add -A
-    git commit -m "TEMP: RepoSync auto-save" || goto :pull_only
-) else (
-    echo %M%[DRY]%W% Would create temp commit.
+    git commit -m "TEMP: RepoSync auto-save" || (
+        echo %Y%[SKIPPED]%W% Could not create temp commit. Proceeding...
+        goto :pull_only
+    )
 )
 
 :staged
@@ -143,15 +139,17 @@ if %IS_DRY% equ 0 (
         pause
         exit /b 1
     )
-) else (
-    echo %M%[DRY]%W% Would pull with rebase.
 )
 
-echo [%C%4/7%W%] Removing temp commit...
+echo [%C%4/7%W%] Checking for temp commit removal...
 if %IS_DRY% equ 0 (
-    git reset --soft HEAD~1
-) else (
-    echo %M%[DRY]%W% Would remove temp commit.
+    git log -1 --pretty=format:%%s 2>nul | findstr "TEMP: RepoSync auto-save" >nul
+    if !errorlevel! equ 0 (
+        echo      Removing temp commit...
+        git reset --soft HEAD~1
+    ) else (
+        echo      Temp commit was automatically integrated or skipped.
+    )
 )
 
 :pull_only
@@ -181,15 +179,13 @@ if not defined msg (
     echo      Using argument: %Y%!msg!%W%
 )
 
-:: Robust ISO-8601 Timestamp
+:: Timestamp
 for /f "usebackq tokens=*" %%i in (`powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd HH:mm'"`) do set "TS=%%i"
 if "%msg%"=="" set "msg=Update %TS%"
 
 if %IS_DRY% equ 0 (
     git add -A
     git commit -m "!msg!"
-) else (
-    echo %M%[DRY]%W% Would commit: !msg!
 )
 
 :push
@@ -200,10 +196,10 @@ if %IS_DRY% equ 0 (
         echo.
         echo %G%[ SUCCESS - Repository synced! ]%W%
     ) else (
-        echo %R%[ PUSH FAILED ]%W% Check remote status or permissions.
+        echo.
+        echo %R%[ PUSH FAILED ]%W% Remote branch may have new changes. 
+        echo           Run RepoSync again to integrate them.
     )
-) else (
-    echo %M%[DRY]%W% Would push to %REMOTE%/%BRANCH%.
 )
 
 echo.
