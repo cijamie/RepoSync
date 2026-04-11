@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 :: ================================================================
-:: REPOSYNC - The Ultimate Git Sync Utility (v2.2.1)
+:: REPOSYNC - The Ultimate Git Sync Utility (v2.2.2)
 :: MIT License - Copyright (c) 2026 cijamie
 :: ================================================================
 
@@ -16,7 +16,7 @@ set "C=%ESC%[96m"  & :: Cyan
 set "Y=%ESC%[93m"  & :: Yellow
 set "M=%ESC%[95m"  & :: Magenta
 set "W=%ESC%[0m"   & :: White/Reset
-set "B=%ESC%[5m"   & :: Blink (may not work in all terminals)
+set "B=%ESC%[5m"   & :: Blink
 
 :: 2. Argument Parsing
 set "ARG1=%~1"
@@ -32,13 +32,16 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: 4. Dynamic Identity Detection
+:: 4. Dynamic Identity Detection & Path Correction
 for /f "tokens=*" %%i in ('git rev-parse --show-toplevel 2^>nul') do set "REPO_ROOT=%%i"
 if "%REPO_ROOT%"=="" (
     echo %R%[ERROR]%W% This folder is not a Git repository.
     pause
     exit /b 1
 )
+
+:: FORCE move to repo root (Critical for double-click success)
+cd /d "%REPO_ROOT%"
 
 :: Try to detect upstream tracking branch
 for /f "tokens=*" %%i in ('git rev-parse --abbrev-ref @{u} 2^>nul') do set "UPSTREAM=%%i"
@@ -51,9 +54,9 @@ if defined UPSTREAM (
     if "!REMOTE!"=="" (for /f "tokens=*" %%i in ('git remote 2^>nul') do set "REMOTE=%%i")
 )
 
-title RepoSync v2.2.1 - %BRANCH% @ %REMOTE%
+title RepoSync v2.2.2 - %BRANCH% @ %REMOTE%
 echo %C%================================================================%W%
-echo           %G%REPOSYNC v2.2.1 - ELITE SYNC UTILITY%W%
+echo           %G%REPOSYNC v2.2.2 - ELITE SYNC UTILITY%W%
 echo           Target: %Y%%BRANCH%%W% on %Y%%REMOTE%%W%
 echo %C%================================================================%W%
 
@@ -75,7 +78,7 @@ if %IS_DRY% equ 1 (
 )
 
 :: 6. Self-Healing: Check for "Stale" States
-if exist "%REPO_ROOT%\.git\rebase-merge" (
+if exist ".git\rebase-merge" (
     echo %R%[ALERT]%W% A previous rebase was interrupted.
     if %IS_DRY% equ 0 (
         set /p fix="Resolve and continue? (y/n): "
@@ -92,7 +95,7 @@ if exist "%REPO_ROOT%\.git\rebase-merge" (
 )
 
 :: Check for existing "TEMP" commit from previous failed run
-git log -1 --pretty=format:%%s | findstr "TEMP: RepoSync auto-save" >nul
+git log -1 --pretty=format:%%s 2>nul | findstr "TEMP: RepoSync auto-save" >nul
 if %errorlevel% equ 0 (
     echo %Y%[RECOVERY]%W% Found a leftover 'TEMP' commit. 
     if %IS_DRY% equ 0 (
@@ -114,8 +117,10 @@ if %errorlevel% neq 0 (
 
 :: 8. Sync Logic
 echo [%C%1/7%W%] Detecting repo state...
-git status --porcelain | findstr . >nul
-if %errorlevel% neq 0 (
+set "HAS_CHANGES=0"
+for /f "tokens=*" %%i in ('git status --porcelain') do set "HAS_CHANGES=1"
+
+if %HAS_CHANGES% equ 0 (
     echo      No local changes detected.
     goto :pull_only
 )
@@ -151,8 +156,10 @@ if %IS_DRY% equ 0 (
 
 :pull_only
 echo [%C%5/7%W%] Checking for final changes...
-git status --porcelain | findstr . >nul
-if %errorlevel% neq 0 (
+set "FINAL_CHANGES=0"
+for /f "tokens=*" %%i in ('git status --porcelain') do set "FINAL_CHANGES=1"
+
+if %FINAL_CHANGES% equ 0 (
     echo      No changes to commit.
     goto :push
 )
