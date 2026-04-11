@@ -142,45 +142,49 @@ echo %C%================================================================%W%
 
 :: 11. Connectivity & Fetch
 echo %C%[1/8]%W% Verifying connectivity and fetching updates...
-git ls-remote --exit-code %REMOTE% %BRANCH% >nul 2>&1
+git ls-remote --exit-code "%REMOTE%" "%BRANCH%" >nul 2>&1
+set "LSRC_EXIT=%errorlevel%"
 set "IS_NEW_BRANCH=0"
-if "%errorlevel%"=="2" (
+
+if "%LSRC_EXIT%"=="2" (
     echo      Status: [NEW BRANCH] - No remote counterpart yet.
     set "IS_NEW_BRANCH=1"
-) else (
-    git fetch %REMOTE% %BRANCH% >nul 2>&1
-    if !errorlevel! neq 0 (
-        echo %R%[ERROR]%W% Remote '%REMOTE%' is unreachable or branch missing.
-        goto :error_exit
-    )
+    goto :analyze_state
+)
+
+git fetch "%REMOTE%" "%BRANCH%" >nul 2>&1
+if errorlevel 1 (
+    echo %R%[ERROR]%W% Remote '%REMOTE%' is unreachable or branch missing.
+    goto :error_exit
 )
 
 :: 12. State Analysis
 :analyze_state
 set "AHEAD=0"
-if "!IS_NEW_BRANCH!"=="0" (
-    for /f "tokens=*" %%i in ('git rev-list --count %REMOTE%/%BRANCH%..HEAD 2^>nul') do set "AHEAD=%%i"
-)
+if "!IS_NEW_BRANCH!"=="1" goto :skip_ahead_behind
+for /f "tokens=*" %%i in ('git rev-list --count "%REMOTE%/%BRANCH%..HEAD" 2^>nul') do set "AHEAD=%%i"
+
 set "BEHIND=0"
-if "!IS_NEW_BRANCH!"=="0" (
-    for /f "tokens=*" %%i in ('git rev-list --count HEAD..%REMOTE%/%BRANCH% 2^>nul') do set "BEHIND=%%i"
-)
+for /f "tokens=*" %%i in ('git rev-list --count "HEAD..%REMOTE%/%BRANCH%" 2^>nul') do set "BEHIND=%%i"
+:skip_ahead_behind
+
 set "DIRTY=0"
 for /f "tokens=*" %%i in ('git status --porcelain') do set "DIRTY=1"
 
 echo      Status: Ahead [%G%%AHEAD%%W%] Behind [%R%%BEHIND%%W%] Dirty [%Y%%DIRTY%%W%]
 
 :: 13. Self-Healing
-if exist ".git\rebase-merge" (
-    echo %R%[ALERT]%W% Rebase is in progress. Attempting to continue...
-    git rebase --continue >nul 2>&1 || (
-        echo %R%[FAIL]%W% Rebase has conflicts. Please resolve manually.
-        goto :error_exit
-    )
+if not exist ".git\rebase-merge" goto :skip_rebase_fix
+echo %R%[ALERT]%W% Rebase is in progress. Attempting to continue...
+git rebase --continue >nul 2>&1
+if errorlevel 1 (
+    echo %R%[FAIL]%W% Rebase has conflicts. Please resolve manually.
+    goto :error_exit
 )
+:skip_rebase_fix
 
 git log -1 --pretty=format:%%s 2>nul | findstr "TEMP: RepoSync auto-save" >nul
-if "%errorlevel%"=="0" (
+if not errorlevel 1 (
     echo %Y%[RECOVERY]%W% Removing leftover TEMP commit...
     git reset --soft HEAD~1
     set "DIRTY=1"
@@ -188,46 +192,43 @@ if "%errorlevel%"=="0" (
 
 :: 14. Sync Logic
 :sync_start
-if "!DIRTY!"=="1" (
-    echo %C%[2/8]%W% Creating temporary save point...
-    if "!IS_DRY!"=="0" (
-        git add -A
-        git commit -m "TEMP: RepoSync auto-save" >nul 2>&1
-    )
-)
+if "!DIRTY!"=="0" goto :skip_temp_save
+if "!IS_DRY!"=="1" goto :skip_temp_save
+echo %C%[2/8]%W% Creating temporary save point...
+git add -A
+git commit -m "TEMP: RepoSync auto-save" >nul 2>&1
+:skip_temp_save
 
-if "!BEHIND!" neq "0" (
-    echo %C%[3/8]%W% Integrating remote changes...
-    if "!IS_DRY!"=="0" (
-        git pull --rebase %REMOTE% %BRANCH%
-        if !errorlevel! neq 0 (
-            echo %R%[CONFLICT]%W% Manual resolution required.
-            goto :error_exit
-        )
-    )
+if "!BEHIND!"=="0" goto :skip_remote_integrate
+if "!IS_DRY!"=="1" goto :skip_remote_integrate
+echo %C%[3/8]%W% Integrating remote changes...
+git pull --rebase "%REMOTE%" "%BRANCH%"
+if errorlevel 1 (
+    echo %R%[CONFLICT]%W% Manual resolution required.
+    goto :error_exit
 )
+:skip_remote_integrate
 
 git log -1 --pretty=format:%%s 2>nul | findstr "TEMP: RepoSync auto-save" >nul
-if "%errorlevel%"=="0" (
-    echo %C%[4/8]%W% Restoring your changes...
-    if "!IS_DRY!"=="0" git reset --soft HEAD~1
-)
+if errorlevel 1 goto :skip_temp_restore
+if "!IS_DRY!"=="1" goto :skip_temp_restore
+echo %C%[4/8]%W% Restoring your changes...
+git reset --soft HEAD~1
+:skip_temp_restore
 
 :: 15. Commit Workflow
 echo %C%[5/8]%W% Finalizing changes...
 set "HAS_FINAL=0"
 for /f "tokens=*" %%i in ('git status --porcelain') do set "HAS_FINAL=1"
 
-if "!HAS_FINAL!"=="0" (
-    if "!AHEAD!"=="0" (
-        if "!BEHIND!"=="0" (
-            echo %G%[ ALREADY UP TO DATE ]%W%
-            goto :end
-        )
-    )
-    goto :push_logic
+if "!HAS_FINAL!"=="1" goto :changelog_summary
+if "!AHEAD!"=="0" if "!BEHIND!"=="0" (
+    echo %G%[ ALREADY UP TO DATE ]%W%
+    goto :end
 )
+goto :push_logic
 
+:changelog_summary
 echo.
 echo %G%[ CHANGELOG SUMMARY ]%W%
 git status --short
@@ -242,7 +243,7 @@ if not defined msg (
     set /p msg="[%G%ENTER COMMIT MESSAGE%W% (blank for auto)]: "
 )
 
-set "TS=Update"
+set "TS_DATE=Unknown"
 for /f "usebackq tokens=*" %%i in (`powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd HH:mm'"`) do set "TS_DATE=%%i"
 if not defined msg (
     set "msg=Update %TS_DATE%"
@@ -259,18 +260,19 @@ if errorlevel 1 (
 
 :: 16. Push Logic
 :push_logic
-echo %C%[7/8]%W% Pushing to %REMOTE%/%BRANCH%...
-if "!IS_DRY!"=="0" (
-    git push %REMOTE% %BRANCH%
-    if !errorlevel! neq 0 (
-        echo %Y%[RETRY]%W% Push failed. Emergency re-sync...
-        git fetch %REMOTE% %BRANCH% >nul 2>&1
-        set "IS_NEW_BRANCH=0"
-        goto :analyze_state
-    )
+if "!IS_DRY!"=="1" goto :end
+echo %C%[7/8]%W% Pushing to "%REMOTE%"/"%BRANCH%"...
+git push "%REMOTE%" "%BRANCH%"
+if not errorlevel 1 (
     echo.
     echo %G%[ SUCCESS - Repository fully synced! ]%W%
+    goto :end
 )
+
+echo %Y%[RETRY]%W% Push failed. Emergency re-sync...
+git fetch "%REMOTE%" "%BRANCH%" >nul 2>&1
+set "IS_NEW_BRANCH=0"
+goto :analyze_state
 
 :end
 echo.
